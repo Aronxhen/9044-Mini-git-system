@@ -1,0 +1,58 @@
+#!/bin/dash
+#
+# COMP9044 Assignment 01 - give
+#
+# 'give-status' commond lists all submissions a student has made.
+#
+# Author: Aron (z5494376@ad.unsw.edu.au)
+#
+# Written: 29/6/2024
+#
+########### main #############
+
+########### give name ##############
+give_order="give-status"
+zid="$1"
+
+######### check argv number#########
+if test $# != 1; then
+    echo "usage: $give_order <zid>" 1>&2
+    exit 1
+fi
+
+######### check valid argv ############
+if ! echo "$zid" | grep -qE "^z[0-9]{7}$"; then
+    echo "$give_order: invalid zid: $zid" 1>&2
+    exit 1
+fi
+
+############ begin implement ##############
+
+cd .give/.ass || { echo "Failed to path to .ass"; exit 1; }
+for ass_name in *; do
+    # for every ass
+    cd "$ass_name" || { echo "Failed to path to $ass_name"; exit 1; }
+        # check zid is not exist
+    if test -d "$zid"; then
+        # zid exist
+        cd "$zid" || { echo "Failed to path to $ass_name"; exit 1; }
+        # and go to count
+        submit_number=0
+        for folder in *; do
+            if test -d "$folder"; then
+                if echo "$folder" | grep -Eq '[0-9]+$'; then
+                    submit_number=$((submit_number + 1))
+                fi
+            fi
+        done
+        echo "* $submit_number submissions for $ass_name"
+        if test $submit_number -ne 0; then 
+            cat _submit.log
+        fi
+        cd ../.. || { echo "Failed to path to back"; exit 1; }
+    else  
+        # not exist so 0 submission
+        echo "no submissions for $zid" 
+        cd .. || { echo "Failed to path to back"; exit 1; }
+    fi
+done

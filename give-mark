@@ -1,0 +1,325 @@
+#!/bin/dash
+#
+# COMP9044 Assignment 01 - give
+#
+# 'give-mark' mark for an assignment on a program.
+#
+# Author: Aron (z5494376@ad.unsw.edu.au)
+#
+# Written: 30/6/2024
+#
+########### main #############
+
+########### give name ##############
+give_order="give-mark"
+ass_name="$1"
+
+######### check argv number#########
+if test $# != 1; then
+    echo "usage: $give_order <assignment>" 1>&2
+    exit 1
+fi
+
+######### check valid argv ############
+if ! echo "$ass_name" | grep -qE "^[a-z][a-zA-Z0-9_]*$"; then
+    echo "$give_order: invalid assignment: $ass_name" 1>&2
+    exit 1
+fi
+
+########### check argv exist ############
+cd .give/.ass || { echo "Failed to create directory .ass"; exit 1; }
+if ! test -d "$ass_name"; then
+    echo "$give_order: assignment $ass_name not found" 1>&2
+    exit 1
+fi
+cd ../.. || { echo "Failed to create directory back"; exit 1; }
+
+############ begin implement ##############
+
+# get solution path and autotest path
+ass_solution=$(find .give/.ass/"$ass_name"/_solution/ -maxdepth 1 -type f | head -n 1)
+ass_marking=$(find .give/.ass/"$ass_name"/_automark/ -maxdepth 1 -type f | head -n 1)
+zid_path=".give/.ass/$ass_name/"
+
+find "$zid_path" -type d | sort -n | while read -r dir; do
+    # echo "$dir"
+    if echo "$dir" | grep -Eq "/z[0-9]{7}$"; then
+        # echo "$dir"
+        # output submit log
+        zid=$(echo "$dir" | grep -oE "z[0-9]{7}")
+        log_file="${dir}/_submit.log"
+        last_log=$(tail -n 1 "$log_file")
+        echo "*** Student $zid - $last_log"
+        # catch last time submit
+        last_time=0
+        for file in "$dir"/*; do
+            if test -d "$file"; then
+                last_time=$((last_time + 1))
+            fi
+        done
+        # get the file path
+        file=$(find "$dir"/"$last_time"/ -type f | head -n 1)
+        
+        # begin to mark
+        pass_num=0
+        failed_num=0
+        get_mark=0
+        total_mark=0
+
+        while read -r line; do
+            # ignore empty line
+            if test -z "$line"; then
+                continue
+            fi
+            # ignore #
+            if echo "$line" | grep -Eq "^#.*"; then
+                continue
+            fi
+            # create two temp file
+            your_output=$(mktemp)
+            sol_output=$(mktemp)
+            your_stderr=$(mktemp)
+            sol_stderr=$(mktemp)
+            newline_your_output=$( mktemp )
+            newline_sol_output=$( mktemp )
+            newline_your_stderr=$( mktemp )
+            newline_sol_stderr=$( mktemp )
+            diff_part=$( mktemp )
+            diff_stderr=$( mktemp )
+            
+            # get the name and argv
+            test_name=$(printf "%s" "$line" | cut -d'|' -f1)
+            test_argv=$(printf "%s" "$line" | cut -d'|' -f2)
+            test_stdin_argv=$(printf "%s" "$line" | cut -d'|' -f3)
+            test_type=$(printf "%s" "$line" | cut -d'|' -f4)
+            test_mark=$(printf "%s" "$line" | cut -d'|' -f5)
+
+
+            if  test -n "$test_mark" && expr "$test_mark" : '^[0-9]\+$' > /dev/null; then
+                total_mark=$((total_mark + test_mark))
+            fi
+
+            # stdin argv or not
+            temp_args=$(mktemp)
+            echo "$test_argv" > "$temp_args"
+            if ! test -z "$test_stdin_argv"; then
+                stdin_temp=$(mktemp)
+                echo "$test_stdin_argv" > "$stdin_temp"
+                # get stdout and stderr from solution and user
+                eval "set -- $(cat "$temp_args")"
+                "$file" "$@" < "$stdin_temp" > "$your_output" 2> "$your_stderr"
+                exit_status1=$?
+                "$ass_solution" "$@" < "$stdin_temp" > "$sol_output" 2> "$sol_stderr"
+                exit_status2=$?
+            else
+                # get stdout and stderr from solution and user
+                eval "set -- $(cat "$temp_args")"
+                "$file" "$@" > "$your_output" 2> "$your_stderr"
+                exit_status1=$?
+                "$ass_solution" "$@" > "$sol_output" 2> "$sol_stderr"
+                exit_status2=$?
+            fi
+
+            # compare two output
+            # check test type of b
+            if echo "$test_type" | grep -q "b"; then
+                grep -v '^[[:space:]]*$' "$your_output" | sponge "$your_output"
+                grep -v '^[[:space:]]*$' "$sol_output"  | sponge "$sol_output"
+            fi
+            # check test type of d
+            if echo "$test_type" | grep -q "d"; then
+                tr -cd '0-9\n' < "$your_output" | sponge "$your_output"
+                tr -cd '0-9\n' < "$sol_output" | sponge "$sol_output"
+            fi
+
+            # check test type of cw
+            # init diff option
+            diff_options=""
+            # for char in test type
+            for char in $(echo "$test_type" | fold -w1); do
+                case "$char" in
+                    c)
+                        diff_options="${diff_options}i"
+                        ;;
+                    w)
+                        diff_options="${diff_options}w"
+                        ;;
+                esac
+            done
+
+            # add -
+            if [ -n "$diff_options" ]; then
+                diff_options="-$diff_options"
+            fi
+
+            # diff_options or not
+            if ! test -z "$diff_options"; then
+                diff $diff_options "$your_output" "$sol_output" > "$diff_part"
+            else
+                diff "$your_output" "$sol_output" > "$diff_part" 
+            fi
+
+            diff "$your_stderr" "$sol_stderr" > "$diff_stderr" 
+            
+            ###################### check part #########################
+            # if your_output is empty
+            if ! test -s "$your_output" && test -s "$diff_part"; then
+                failed_num=$((failed_num + 1))
+                echo "* Test $test_name failed."
+                # stdout
+                correct_byte=$(wc -c < "$sol_output")
+                echo "--- No stdout produced, these $correct_byte bytes expected:"
+                cat "$sol_output"
+                echo
+
+                # add newline
+                cp "$your_stderr" "$newline_your_stderr"
+                cp "$sol_stderr" "$newline_sol_stderr"
+                echo "" >> "$newline_your_stderr"
+                echo "" >> "$newline_sol_stderr"
+
+                # stderr
+                if diff "$newline_your_stderr" "$sol_stderr" > /dev/null; then
+                    echo "Missing newline at end of stderr"
+                elif diff "$your_stderr" "$newline_sol_stderr" > /dev/null; then
+                    echo "Extra newline at end of stderr"
+                else
+                    if test -s "$diff_stderr"; then
+                        incorrect_byte=$(wc -c < "$your_stderr")
+                        echo "--- Incorrect stderr of $incorrect_byte bytes:"
+                        cat "$your_stderr"
+                        echo
+                        correct_byte=$(wc -c < "$sol_stderr" )
+                        echo "--- Correct stderr is these $correct_byte bytes:"
+                        cat "$sol_stderr"
+                        echo
+                    fi
+                fi
+
+                # exit_status
+                if [ "$exit_status1" -ne "$exit_status2" ]; then
+                    echo "Exit status of $exit_status1 incorrect should be $exit_status2"
+                fi
+                # go next test
+                continue
+            fi
+
+            # if sol_output is empty
+            if ! test -s "$sol_output" && test -s "$diff_part"; then
+                failed_num=$((failed_num + 1))
+                echo "* Test $test_name failed."
+                # stdout
+                incorrect_byte=$(wc -c < "$your_output")
+                echo "--- No stdout expected, these $incorrect_byte bytes produced:"
+                cat "$your_output"
+                echo
+
+                # add newline
+                cp "$your_stderr" "$newline_your_stderr"
+                cp "$sol_stderr" "$newline_sol_stderr"
+                echo "" >> "$newline_your_stderr"
+                echo "" >> "$newline_sol_stderr"
+
+                # stderr
+                if diff "$newline_your_stderr" "$sol_stderr" > /dev/null; then
+                    echo "Missing newline at end of stderr"
+                elif diff "$your_stderr" "$newline_sol_stderr" > /dev/null; then
+                    echo "Extra newline at end of stderr"
+                else
+                    if test -s "$diff_stderr"; then
+                        incorrect_byte=$(wc -c < "$your_stderr" )
+                        echo "--- Incorrect stderr of $incorrect_byte bytes:"
+                        cat "$your_stderr"
+                        echo
+                        correct_byte=$(wc -c < "$sol_stderr")
+                        echo "--- Correct stderr is these $correct_byte bytes:"
+                        cat "$sol_stderr"
+                        echo
+                    fi
+                fi
+
+                # exit_status
+                if [ "$exit_status1" -ne "$exit_status2" ]; then
+                    echo "Exit status of $exit_status1 incorrect should be $exit_status2"
+                fi
+                # go next test
+                continue
+            fi
+
+            # check diff part and diff stderr is empty or not
+            if ! test -s "$diff_part" && ! test -s "$diff_stderr"; then
+                echo "* Test $test_name passed ($test_mark marks)".
+                pass_num=$((pass_num + 1))
+                if  test -n "$test_mark" && expr "$test_mark" : '^[0-9]\+$' > /dev/null; then
+                    get_mark=$((get_mark + test_mark))
+                fi
+            else
+                failed_num=$((failed_num + 1))
+                echo "* Test $test_name failed."
+
+                # add newline
+                cp "$your_output" "$newline_your_output"
+                cp "$your_stderr" "$newline_your_stderr"
+                cp "$sol_output" "$newline_sol_output"
+                cp "$sol_stderr" "$newline_sol_stderr"
+                echo "" >> "$newline_your_output"
+                echo "" >> "$newline_your_stderr"
+                echo "" >> "$newline_sol_output"
+                echo "" >> "$newline_sol_stderr"
+
+                # stdout
+                if diff "$newline_your_output" "$sol_output" > /dev/null; then
+                    echo "Missing newline at end of stdout"
+                elif diff "$your_output" "$newline_sol_output" > /dev/null; then
+                    echo "Extra newline at end of stdout"
+                else
+                    if test -s "$diff_part"; then
+                        incorrect_byte=$(wc -c < "$your_output")
+                        # incorrect_byte=$(printf "%s" "${incorrect_part}" | wc -c)
+                        echo "--- Incorrect stdout of $incorrect_byte bytes:"
+                        cat "$your_output"
+                        echo
+                        correct_byte=$(wc -c < "$sol_output")
+                        # correct_byte=$(printf "%s" "${correct_part}" | wc -c)
+                        echo "--- Correct stdout is these $correct_byte bytes:"
+                        cat "$sol_output"
+                        echo
+                    fi
+                fi
+
+                # stderr
+                if diff "$newline_your_stderr" "$sol_stderr" > /dev/null; then
+                    echo "Missing newline at end of stderr"
+                elif diff "$your_stderr" "$newline_sol_stderr" > /dev/null; then
+                    echo "Extra newline at end of stdout"
+                else
+                    if test -s "$diff_stderr"; then
+                        incorrect_byte=$(wc -c < "$your_stderr")
+                        echo "--- Incorrect stderr of $incorrect_byte bytes:"
+                        cat "$your_stderr"
+                        echo
+                        correct_byte=$(wc -c < "$sol_stderr") 
+                        echo "--- Correct stderr is these $correct_byte bytes:"
+                        cat "$sol_stderr"
+                        echo
+                    fi
+                fi
+
+                # exit status
+                if [ "$exit_status1" -ne "$exit_status2" ]; then
+                    echo "Exit status of $exit_status1 incorrect should be $exit_status2"
+                fi
+            fi
+            # remove mktemp
+            rm "$your_output" "$sol_output" "$your_stderr" "$sol_stderr"
+            rm "$diff_part" "$diff_stderr"
+            rm "$newline_your_output" "$newline_your_stderr" "$newline_sol_output" "$newline_sol_stderr"
+        # give a mark file
+        done < "$ass_marking"
+        if test "$total_mark" -eq 0; then
+            echo "No automarking"
+            continue
+        fi
+        echo "** $pass_num tests passed, $failed_num tests failed - mark: $get_mark/$total_mark" 
+    fi
+done

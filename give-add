@@ -1,0 +1,109 @@
+#!/bin/dash
+#
+# COMP9044 Assignment 01 - give
+#
+# 'give-add' commond create a new Give assignment
+#
+# Author: Aron (z5494376@ad.unsw.edu.au)
+#
+# Written: 28/6/2024
+#
+########### main #############
+
+########### give name ##############
+give_order="give-add"
+ass_name="$1"
+ass_solution="$2"
+ass_autotest="$3"
+ass_automark="$4"
+
+######### check argv number#########
+if test $# != 4; then
+    echo "usage: $give_order <assignment> <solution> <autotests> <automarking>" 1>&2
+    exit 1
+fi
+
+######### check valid argv ############
+if ! echo "$1" | grep -qE "^[a-z][a-zA-Z0-9_]*$"; then
+    echo "$give_order: invalid assignment: $ass_name" 1>&2
+    exit 1
+fi
+
+if ! echo "$2" | grep -qE "^[a-zA-Z0-9.][a-zA-Z0-9\_\-\.\/]*$"; then
+    echo "$give_order: invalid solution: $ass_solution" 1>&2
+    exit 1
+fi
+
+if ! echo "$3" | grep -qE "^[a-zA-Z0-9\.\_\-\/]+$"; then
+    echo "$give_order: invalid autotests: $ass_autotest" 1>&2
+    exit 1
+fi
+
+if ! echo "$4" | grep -qE "^[a-zA-Z0-9\.\_\-\/]+$"; then
+    echo "$give_order: invalid automarking: $ass_automark" 1>&2
+    exit 1
+fi
+
+######### init .give ##############
+if ! test -d ".give"; then
+    mkdir .give
+    echo "directory .give created"
+fi
+
+########### check argv exist ############
+if ! test -f "$ass_solution"; then
+    echo "$give_order: $ass_solution: No such file or directory" 1>&2
+    exit 1
+fi
+
+if ! test -f "$ass_autotest"; then
+    echo "$give_order: $ass_autotest: No such file or directory" 1>&2
+    exit 1
+fi
+
+if ! test -f "$ass_automark"; then
+    echo "$give_order: $ass_automark: No such file or directory" 1>&2
+    exit 1
+fi
+
+############ begin implement ##############
+# cd to .give
+cd .give || { echo "Failed to create directory .give"; exit 1; }
+# create folder
+if ! test -d ".reference"; then
+    mkdir ".reference"
+fi
+# cd to .ass
+if ! test -d ".ass"; then
+    mkdir ".ass"
+fi
+cd .ass || { echo "Failed to create directory .ass"; exit 1; }
+
+# cd to ass
+if ! test -d "$ass_name"; then
+    mkdir "$ass_name"
+else
+    echo "$give_order: assignment $ass_name already exists" 1>&2
+    exit 1
+fi
+cd "$ass_name" || { echo "Failed to create directory $ass_name"; exit 1; }
+
+# create three folder if not exist
+if ! test -d "_solution"; then
+    mkdir _solution
+fi
+
+if ! test -d "_autotest"; then
+    mkdir _autotest
+fi
+
+if ! test -d "_automark"; then
+    mkdir _automark
+fi
+
+# copy three file to the folders
+cd ../../.. || { echo "Failed to path to home"; exit 1; }
+cp -p "$ass_solution" ./.give/.ass/"$ass_name"/_solution/
+cp -p "$ass_autotest" ./.give/.ass/"$ass_name"/_autotest/
+cp -p "$ass_automark" ./.give/.ass/"$ass_name"/_automark/
+echo "assignment $ass_name created"

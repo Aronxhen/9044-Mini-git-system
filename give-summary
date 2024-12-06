@@ -1,0 +1,49 @@
+#!/bin/dash
+#
+# COMP9044 Assignment 01 - give
+#
+# 'give-summary' commond lists all assignments with a count of count of how many students have made submissions.
+#
+# Author: Aron (z5494376@ad.unsw.edu.au)
+#
+# Written: 29/6/2024
+#
+########### main ################
+
+########### give name ##############
+give_order="give-summary"
+
+######### check argv number#########
+if test $# != 0; then
+    echo "usage: $give_order do not need any arguments" 1>&2
+    exit 1
+fi
+
+######### check exist #########
+if test -z "$(ls -A ".give/.ass")"; then
+    echo "no assignments"
+    exit 1
+fi
+
+############ begin implement ##############
+
+cd .give/.ass || { echo "Failed to path to .ass"; exit 1; }
+# begin to summary
+for ass_name in *; do
+    if test -d "$ass_name"; then
+        # for evey ass
+        cd "$ass_name" || { echo "Failed to path to $ass_name"; exit 1; }
+        submit_number=0
+        for dir in *; do
+            # check it is folder
+            if test -d "$dir"; then
+                # check the name is z1234567
+                if echo "$dir" | grep -Eq '^z[0-9]{7}$'; then
+                    submit_number=$((submit_number + 1))
+                fi
+            fi
+        done
+        echo "assignment $ass_name: submissions from $submit_number students" 
+        cd .. || { echo "Failed to path to back"; exit 1; }
+    fi
+done

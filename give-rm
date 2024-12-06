@@ -1,0 +1,39 @@
+#!/bin/dash
+#
+# COMP9044 Assignment 01 - give
+#
+# 'give-rm' commond remove one assignment
+#
+# Author: Aron (z5494376@ad.unsw.edu.au)
+#
+# Written: 29/6/2024
+#
+########### main #############
+
+########### give name ##############
+give_order="give-rm"
+ass_name="$1"
+
+######### check argv number#########
+if test $# != 1; then
+    echo "usage: $give_order <assignment>" 1>&2
+    exit 1
+fi
+
+######### check valid argv ############
+
+if ! echo "$ass_name" | grep -qE "^[a-z][a-zA-Z0-9_]*$"; then
+    echo "$give_order: invalid assignment: $ass_name" 1>&2
+    exit 1
+fi
+
+############ begin implement ##############
+
+cd .give/.ass || { echo "Failed to path to .ass"; exit 1; }
+
+if test -d "$ass_name"; then
+    rm -rf "$ass_name"
+    echo "assignment $ass_name removed"
+else
+    echo "Can not find $ass_name"
+fi

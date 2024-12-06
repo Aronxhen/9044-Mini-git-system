@@ -1,0 +1,119 @@
+#!/bin/dash
+#
+# COMP9044 Assignment 01 - give
+#
+# 'give-fetch' commond output the assignment which is submitted at some times
+#
+# Author: Aron (z5494376@ad.unsw.edu.au)
+#
+# Written: 30/6/2024
+#
+######## main #########
+
+########### give name ##############
+give_order="give-fetch"
+ass_name="$1"
+zid="$2"
+submit_time="$3"
+
+######### check argv number#########
+if test $# != 2 && test $# != 3; then
+    echo "usage: $give_order <assignment> <zid> [n]" 1>&2
+    exit 1
+fi
+
+######### check valid argv ############
+if ! echo "$ass_name" | grep -qE "^[a-z][a-zA-Z0-9_]*$"; then
+    echo "$give_order: invalid assignment: $ass_name" 1>&2
+    exit 1
+fi
+
+if ! echo "$zid" | grep -qE "^z[0-9]{7}$"; then
+    echo "$give_order: invalid zid: $zid" 1>&2
+    exit 1
+fi
+
+########### check argv exist ############
+cd .give/.ass || { echo "Failed to path to .ass"; exit 1; }
+# check no ass name
+if ! test -d "$ass_name"; then
+    # from submit and autotest i guess
+    echo "$give_order: assignment $ass_name not found" 1>&2
+    exit 1
+fi
+
+cd "$ass_name" || { echo "Failed to path to $ass_name"; exit 1; }
+# check no zid
+if ! test -d "$zid"; then
+    # from status i guess
+    echo "no submissions for $zid" 1>&2
+    exit 1
+fi
+# check zid is not empty
+if test -z "$(ls -A "$zid")"; then  
+    # from status i guess
+    echo "no submissions for $zid" 1>&2
+    exit 1
+fi
+
+############ begin implement ##############
+
+cd "$zid" || { echo "Failed to path to $zid"; exit 1; }
+# n is not exists 
+# or 
+# n = 0
+if test -z "$submit_time" || test "$submit_time" -eq 0; then
+        # get last time
+        last_time=0
+        for time in *; do
+            if echo "$time" | grep -Eq "^[0-9]+$"; then
+                last_time=$((last_time + 1 ))
+            fi
+        done
+        # go into the last time folder
+        cd "$last_time" || { echo "Failed to path to $last_time"; exit 1; }
+        file=$(find . -maxdepth 1 -type f | head -n 1)
+        cat "$file"
+
+# n > 0 or n < 0
+else
+    # n > 0
+    if test "$submit_time" -gt 0; then
+        # n is not exist
+        if ! test -d "$submit_time"; then
+        echo "$give_order: submission $submit_time not found for $ass_name" 1>&2
+        exit 1
+        fi
+        # go into the time folder
+        cd "$submit_time" || { echo "Failed to path to $submit_time"; exit 1; }
+        file=$(find . -maxdepth 1 -type f | head -n 1)
+        cat "$file"
+
+    # n < 0
+    elif test "$submit_time" -lt 0; then
+        # get total times
+        last_time=0
+        for time in *; do
+            if echo "$time" | grep -Eq "^[0-9]+$"; then
+                last_time=$((last_time + 1 ))
+            fi
+        done
+
+        # reserve chose submit time
+        # if n = -1  total_time = 10
+        # n + total = 9
+        # so 9 is the way
+        submit_time=$((last_time + submit_time))
+        # but must n + total > 0
+        if test "$submit_time" -gt 0; then
+            cd "$submit_time" || { echo "Failed to path to $submit_time"; exit 1; }
+            file=$(find . -maxdepth 1 -type f | head -n 1)
+            cat "$file"
+        else
+            # but must n + total > 0
+            # wrong n if n + total <= 0 
+            echo "$give_order: invalid n: $submit_time" 1>&2
+            exit 1
+        fi
+    fi
+fi

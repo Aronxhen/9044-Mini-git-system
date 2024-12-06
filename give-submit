@@ -1,0 +1,113 @@
+#!/bin/dash
+#
+# COMP9044 Assignment 01 - give
+#
+# 'give-submit' commond submit assignment
+#
+# Author: Aron (z5494376@ad.unsw.edu.au)
+#
+# Written: 28/6/2024
+#
+########### main ###################
+
+########### give name ##############
+give_order="give-submit"
+ass_name="$1"
+zid="$2"
+file_name="$3"
+
+######### check argv number#########
+if test $# != 3; then
+    echo "usage: $give_order <assignment> <zid> <filename>" 1>&2
+    exit 1
+fi
+
+######### check valid argv ############
+if ! echo "$ass_name" | grep -qE "^[a-z][a-zA-Z0-9_]*$"; then
+    echo "$give_order: invalid assignment: $ass_name" 1>&2
+    exit 1
+fi
+
+if ! echo "$zid" | grep -qE "^z[0-9]{7}$"; then
+    echo "$give_order: invalid zid: $zid" 1>&2
+    exit 1
+fi
+
+if ! echo "$file_name" | grep -qE "^[a-zA-Z0-9.][a-zA-Z0-9\_\-\.\/]*$"; then
+    echo "$give_order: invalid filename: $file_name" 1>&2
+    exit 1
+fi
+
+########### check argv exist ############
+# check file is exist
+if ! test -f "$file_name"; then
+    echo "$give_order: $file_name: No such file or directory" 1>&2
+    exit 1
+fi
+# gain the file size
+file_size=$(stat --format="%s" "$file_name")
+
+cd .give/.ass || { echo "Failed to path to .ass"; exit 1; }
+# check ass is exist
+if ! test -d "$ass_name"; then
+    echo "$give_order: assignment $ass_name not found" 1>&2
+    exit 1
+fi
+
+############ begin implement ##############
+
+# copy the file into zid folder
+cd "$ass_name" || { echo "Failed to path to $ass_name"; exit 1; }
+submit_time=1
+# check zid folder exist
+if ! test -d "$zid"; then
+    # create zid folder if not exist
+    mkdir "$zid"
+    cd "$zid" || { echo "Failed to path to $zid"; exit 1; }
+    mkdir "$submit_time"
+    # add log in submit.log
+    touch _submit.log
+    time=$(date "+%a %b %d %T %Y")
+    echo "submission $submit_time: $file_name $file_size bytes @ $time" >> _submit.log
+    # cp file in the submit time folder
+    cd ../../../.. || { echo "Failed to path to back"; exit 1; }
+    cp -p "$file_name" ./.give/.ass/"$ass_name"/"$zid"/"$submit_time"/
+    echo "Submission accepted - submission $submit_time: $file_name $file_size bytes @ $time"
+else
+    cd "$zid" || { echo "Failed to path to $zid"; exit 1; }
+    if ! test -d "1"; then
+        # if student no submit
+        mkdir "$submit_time"
+        # add log in submit.log
+        if ! test -f _submit.log; then
+            touch _submit.log
+        fi
+        time=$(date "+%a %b %d %T %Y")
+        echo "submission $submit_time: $file_name $file_size bytes @ $time" >> _submit.log
+        # cp file in the submit time folder
+        cd ../../../..
+        cp -p "$file_name" ./.give/.ass/"$ass_name"/"$zid"/"$submit_time"/
+        echo "Submission accepted - submission $submit_time: $file_name $file_size bytes @ $time"
+    else
+        # student has already submitted
+        submit_time=0
+        for folder in [0-9]*; do
+            if test -d "$folder"; then
+                submit_time=$((submit_time + 1))
+            fi
+        done
+        submit_time=$((submit_time + 1))
+        # submit this time
+        mkdir "$submit_time"
+        # add log in submit.log
+        if ! test -f _submit.log; then
+            touch _submit.log
+        fi
+        time=$(date "+%a %b %d %T %Y")
+        echo "submission $submit_time: $file_name $file_size bytes @ $time" >> _submit.log
+        # cp file in the submit time folder
+        cd ../../../.. || { echo "Failed to path to back"; exit 1; }
+        cp -p "$file_name" ./.give/.ass/"$ass_name"/"$zid"/"$submit_time"/
+        echo "Submission accepted - submission $submit_time: $file_name $file_size bytes @ $time"
+    fi
+fi
